@@ -42,6 +42,7 @@ func main() {
 	http.HandleFunc("/stats", srv.handleStats)
 	http.HandleFunc("/logs", srv.handleLogs)
 	http.HandleFunc("/reset", srv.handleReset)
+	http.HandleFunc("/health", srv.handleHealth)
 
 	srv.logger.Printf("Сервер запущен на %s", srv.port)
 	if err := http.ListenAndServe(srv.port, nil); err != nil {

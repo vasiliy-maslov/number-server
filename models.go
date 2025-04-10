@@ -22,6 +22,11 @@ type ResetResponse struct {
 	Status string `json:"status"`
 }
 
+type HealthResponse struct {
+	ServerStatus string `json:"status"`
+	DBStatus     string `json:"db"`
+}
+
 type WorkerPool struct {
 	numbersChan chan int
 	statsChan   chan chan Stats

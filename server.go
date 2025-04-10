@@ -99,3 +99,24 @@ func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {
 	}
 	s.logger.Printf("POST /reset: сброс выполнен")
 }
+
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	healthResponse := HealthResponse{ServerStatus: "ok", DBStatus: "connected"}
+	if err := s.worker.Ping(); err != nil {
+		s.logger.Printf("POST /health: ошибка подключения к БД: %v", err)
+		healthResponse = HealthResponse{ServerStatus: "error", DBStatus: "disconnected"}
+	}
+
+	if err := json.NewEncoder(w).Encode(healthResponse); err != nil {
+		s.logger.Printf("POST /health: ошибка кодирования: %v", err)
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		return
+	}
+	s.logger.Printf("POST /health: подключение успешно")
+
+}

@@ -13,6 +13,7 @@ type Worker interface {
 	GetStats() Stats
 	Reset()
 	GetLogs() string
+	Ping() error
 }
 
 type PostgresWorker struct {
@@ -101,4 +102,8 @@ func (pw *PostgresWorker) GetLogs() string {
 		fmt.Fprintf(&logs, "[%s] [%s] Number: %d\n", t.Format("2006-01-02 15:04:05"), kind, num)
 	}
 	return logs.String()
+}
+
+func (pw *PostgresWorker) Ping() error {
+	return pw.db.Ping()
 }
