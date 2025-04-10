@@ -1,4 +1,11 @@
 {
-    "port": ":8080",
-    "log_file": "server.log"
+  "port": ":8080",
+  "log_file": "server.log",
+  "db": {
+      "host": "localhost",
+      "port": 5432,
+      "user": "postgres",
+      "password": "123456",
+      "dbname": "number_server"
   }
+}

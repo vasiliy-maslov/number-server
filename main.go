@@ -20,7 +20,12 @@ func main() {
 		return
 	}
 
-	wp := NewWorkerPool(cfg.LogFile)
+	wp, err := NewPostgresWorker(cfg.DB)
+	if err != nil {
+		fmt.Printf("Ошибка подключения к БД: %v\n", err)
+	}
+	defer wp.db.Close()
+
 	srv := NewServer(cfg, wp)
 
 	if err := os.WriteFile(cfg.LogFile, []byte{}, 0644); err != nil {

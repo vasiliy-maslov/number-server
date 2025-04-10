@@ -22,11 +22,6 @@ type ResetResponse struct {
 	Status string `json:"status"`
 }
 
-type Config struct {
-	Port    string `json:"port"`
-	LogFile string `json:"log_file"`
-}
-
 type WorkerPool struct {
 	numbersChan chan int
 	statsChan   chan chan Stats
@@ -40,4 +35,18 @@ type Server struct {
 	port   string
 	logger *log.Logger
 	worker Worker
+}
+
+type DBConfig struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	User     string `json:"user"`
+	Password string `json:"password"`
+	DBName   string `json:"dbname"`
+}
+
+type Config struct {
+	Port    string   `json:"port"`
+	LogFile string   `json:"log_file"`
+	DB      DBConfig `json:"db"`
 }

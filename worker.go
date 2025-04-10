@@ -1,9 +1,10 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
-	"os"
-	"sync"
+	_ "github.com/lib/pq"
+	"strings"
 	"time"
 )
 
@@ -14,100 +15,78 @@ type Worker interface {
 	GetLogs() string
 }
 
-func NewWorkerPool(logFile string) *WorkerPool {
-	wp := &WorkerPool{
-		numbersChan: make(chan int, 10),
-		statsChan:   make(chan chan Stats),
-		resultsChan: make(chan Stats),
-		resetChan:   make(chan struct{}),
-		logMutex:    &sync.Mutex{},
-		logFile:     logFile,
-	}
-
-	go wp.worker()
-	go wp.worker()
-
-	return wp
+type PostgresWorker struct {
+	db *sql.DB
 }
 
-func (wp *WorkerPool) worker() {
-	logFile, err := os.OpenFile(wp.logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+func NewPostgresWorker(cfg DBConfig) (*PostgresWorker, error) {
+	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName)
+	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		fmt.Println("Ошибка при открытии лога: ", err)
+		return nil, fmt.Errorf("failed to open db: %v", err)
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to ping db: %v", err)
+	}
+	return &PostgresWorker{db: db}, nil
+}
+
+func (pw *PostgresWorker) ProcessNumber(num int) {
+	isEven := num%2 == 0
+	_, err := pw.db.Exec("INSERT INTO numbers (number, is_even) VALUES ($1, $2)", num, isEven)
+	if err != nil {
+		fmt.Printf("Failed to insert number: %v\n", err)
 		return
 	}
-	defer logFile.Close()
-
-	evenCount, oddCount := 0, 0
-
-	for {
-		select {
-		case num := <-wp.numbersChan:
-			wp.logMutex.Lock()
-			logTime := time.Now().Format("2006-01-02 15:04:05")
-			if num%2 == 0 {
-				evenCount++
-				_, err := fmt.Fprintf(logFile, "[%s] [EVEN] Number: %d, Total: %d\n", logTime, num, evenCount)
-				if err != nil {
-					fmt.Println("Ошибка при записи в лог: ", err)
-					wp.logMutex.Unlock()
-					return
-				}
-			} else {
-				oddCount++
-				_, err := fmt.Fprintf(logFile, "[%s] [ODD] Number: %d, Total: %d\n", logTime, num, oddCount)
-				if err != nil {
-					fmt.Println("Ошибка при записи в лог: ", err)
-					wp.logMutex.Unlock()
-					return
-				}
-			}
-			wp.logMutex.Unlock()
-		case replyChan := <-wp.statsChan:
-			replyChan <- Stats{Even: evenCount, Odd: oddCount}
-		case <-wp.resetChan:
-			evenCount, oddCount = 0, 0
-		}
+	if isEven {
+		_, err = pw.db.Exec("UPDATE stats SET even_count = even_count + 1 WHERE worker_id = 1")
+	} else {
+		_, err = pw.db.Exec("UPDATE stats SET odd_count = odd_count + 1 WHERE worker_id = 1")
 	}
-}
-
-func (wp *WorkerPool) ProcessNumber(num int) {
-	wp.numbersChan <- num
-}
-
-func (wp *WorkerPool) GetStats() Stats {
-	respChan := make(chan Stats)
-	wp.statsChan <- respChan
-	wp.statsChan <- respChan
-	totalStats := Stats{}
-
-	for range 2 {
-		stats := <-respChan
-		totalStats.Even += stats.Even
-		totalStats.Odd += stats.Odd
-	}
-
-	return totalStats
-}
-
-func (wp *WorkerPool) Reset() {
-	wp.resetChan <- struct{}{}
-	wp.resetChan <- struct{}{}
-	wp.logMutex.Lock()
-	defer wp.logMutex.Unlock()
-	if err := os.WriteFile(wp.logFile, []byte{}, 0644); err != nil {
-		fmt.Printf("Ошибка очистки лога: %v\n", err)
-	}
-}
-
-func (wp *WorkerPool) GetLogs() string {
-	wp.logMutex.Lock()
-	defer wp.logMutex.Unlock()
-	data, err := os.ReadFile(wp.logFile)
 	if err != nil {
-		// Логируем ошибку через fmt или другой способ, так как у WorkerPool нет logger'а
-		fmt.Printf("Ошибка чтения логов: %v\n", err)
+		fmt.Printf("Failed to update stats: %v\n", err)
+	}
+}
+
+func (pw *PostgresWorker) GetStats() Stats {
+	var total Stats
+	row := pw.db.QueryRow("SELECT SUM(even_count), SUM(odd_count) FROM stats")
+	if err := row.Scan(&total.Even, &total.Odd); err != nil {
+		fmt.Printf("Failed to get stats: %v\n", err)
+	}
+	return total
+}
+
+func (pw *PostgresWorker) Reset() {
+	_, err := pw.db.Exec("TRUNCATE numbers, stats; INSERT INTO stats (worker_id, even_count, odd_count) VALUES (1, 0, 0), (2, 0, 0)")
+	if err != nil {
+		fmt.Printf("Failed to reset: %v\n", err)
+	}
+}
+
+func (pw *PostgresWorker) GetLogs() string {
+	rows, err := pw.db.Query("SELECT number, is_even, processed_at FROM numbers ORDER BY processed_at")
+	if err != nil {
+		fmt.Printf("Failed to get logs: %v\n", err)
 		return ""
 	}
-	return string(data)
+	defer rows.Close()
+	var logs strings.Builder
+	for rows.Next() {
+		var num int
+		var isEven bool
+		var t time.Time
+		if err := rows.Scan(&num, &isEven, &t); err != nil {
+			fmt.Printf("Failed to scan log: %v\n", err)
+			continue
+		}
+		kind := "ODD"
+		if isEven {
+			kind = "EVEN"
+		}
+		fmt.Fprintf(&logs, "[%s] [%s] Number: %d\n", t.Format("2006-01-02 15:04:05"), kind, num)
+	}
+	return logs.String()
 }
