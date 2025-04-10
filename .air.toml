@@ -1,0 +1,9 @@
+[build]
+cmd = "go build -o tmp/main.exe"
+bin = "tmp/main.exe"
+include_ext = ["go"]
+exclude_dir = ["tmp"]
+delay = 1000 # Задержка в миллисекундах перед перезапуском
+
+[log]
+time = true # Показывать время в логах
