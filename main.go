@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
+	"time"
+
+	"github.com/segmentio/kafka-go"
 )
 
 func main() {
@@ -32,6 +37,34 @@ func main() {
 	}()
 
 	srv := NewServer(cfg, wp)
+
+	go func() {
+		maxAttempts := 10
+		for i := 0; i < maxAttempts; i++ {
+			reader := kafka.NewReader(kafka.ReaderConfig{
+				Brokers: []string{"kafka:9092"},
+				Topic:   "numbers",
+				GroupID: "number-consumer",
+			})
+			defer reader.Close()
+
+			for {
+				msg, err := reader.ReadMessage(context.Background())
+				if err != nil {
+					srv.logger.Printf("Попытка %d: ошибка чтения из Kafka: %v", i+1, err)
+					time.Sleep(2 * time.Second)
+					break
+				}
+				num, err := strconv.Atoi(string(msg.Value))
+				if err != nil {
+					srv.logger.Printf("Ошибка парсинга числа из Kafka: %v", err)
+					continue
+				}
+				srv.worker.ProcessNumber(num)
+				srv.logger.Printf("Обработано число из Kafka: %d", num)
+			}
+		}
+	}()
 
 	if err := os.WriteFile(cfg.LogFile, []byte{}, 0644); err != nil {
 		srv.logger.Printf("Ошибка очистки логов: %v", err)

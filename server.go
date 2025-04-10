@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"time"
+
+	"github.com/segmentio/kafka-go"
 )
 
 func NewServer(cfg Config, w Worker) *Server {
@@ -12,6 +17,11 @@ func NewServer(cfg Config, w Worker) *Server {
 		port:   cfg.Port,
 		logger: log.New(os.Stdout, "server: ", log.LstdFlags),
 		worker: w,
+		kafkaWriter: &kafka.Writer{
+			Addr:     kafka.TCP("kafka:9092"),
+			Topic:    "numbers",
+			Balancer: &kafka.LeastBytes{},
+		},
 	}
 }
 
@@ -29,7 +39,22 @@ func (s *Server) handleNumber(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.worker.ProcessNumber(req.Number)
+	msg := kafka.Message{
+		Value: []byte(fmt.Sprintf("%d", req.Number)),
+	}
+	maxAttempts := 5
+	for i := 0; i < maxAttempts; i++ {
+		err := s.kafkaWriter.WriteMessages(context.Background(), msg)
+		if err == nil {
+			break
+		}
+		s.logger.Printf("Попытка %d: ошибка отправки в Kafka: %v", i+1, err)
+		if i == maxAttempts-1 {
+			http.Error(w, "Error sending to Kafka", http.StatusInternalServerError)
+			return
+		}
+		time.Sleep(2 * time.Second)
+	}
 
 	resp := NumberResponse{Status: "odd"}
 	if req.Number%2 == 0 {

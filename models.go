@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"sync"
+
+	"github.com/segmentio/kafka-go"
 )
 
 type Stats struct {
@@ -37,9 +39,10 @@ type WorkerPool struct {
 }
 
 type Server struct {
-	port   string
-	logger *log.Logger
-	worker Worker
+	port        string
+	logger      *log.Logger
+	worker      Worker
+	kafkaWriter *kafka.Writer
 }
 
 type DBConfig struct {
