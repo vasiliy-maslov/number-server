@@ -22,15 +22,27 @@ type PostgresWorker struct {
 func NewPostgresWorker(cfg DBConfig) (*PostgresWorker, error) {
 	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName)
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open db: %v", err)
-	}
-	if err := db.Ping(); err != nil {
+
+	var db *sql.DB
+	var err error
+	maxAttempts := 10
+	for i := 0; i < maxAttempts; i++ {
+		db, err = sql.Open("postgres", connStr)
+		if err != nil {
+			fmt.Printf("Попытка %d: не удалось открыть БД: %v\n", i+1, err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		err = db.Ping()
+		if err == nil {
+			fmt.Printf("Успешное подключение к БД после %d попыток\n", i+1)
+			return &PostgresWorker{db: db}, nil
+		}
+		fmt.Printf("Попытка %d: не удалось пинговать БД: %v\n", i+1, err)
 		db.Close()
-		return nil, fmt.Errorf("failed to ping db: %v", err)
+		time.Sleep(2 * time.Second)
 	}
-	return &PostgresWorker{db: db}, nil
+	return nil, fmt.Errorf("failed to connect to db after %d attempts: %v", maxAttempts, err)
 }
 
 func (pw *PostgresWorker) ProcessNumber(num int) {

@@ -23,8 +23,13 @@ func main() {
 	wp, err := NewPostgresWorker(cfg.DB)
 	if err != nil {
 		fmt.Printf("Ошибка подключения к БД: %v\n", err)
+		return
 	}
-	defer wp.db.Close()
+	defer func() {
+		if err := wp.db.Close(); err != nil {
+			fmt.Printf("Ошибка закрытия БД: %v\n", err)
+		}
+	}()
 
 	srv := NewServer(cfg, wp)
 

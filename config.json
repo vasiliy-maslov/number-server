@@ -2,7 +2,7 @@
   "port": ":8080",
   "log_file": "server.log",
   "db": {
-      "host": "localhost",
+      "host": "db",
       "port": 5432,
       "user": "postgres",
       "password": "123456",
