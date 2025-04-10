@@ -107,16 +107,16 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	healthResponse := HealthResponse{ServerStatus: "ok", DBStatus: "connected"}
+	w.Header().Set("Content-Type", "application/json")
 	if err := s.worker.Ping(); err != nil {
-		s.logger.Printf("POST /health: ошибка подключения к БД: %v", err)
+		s.logger.Printf("GET /health: ошибка подключения к БД: %v", err)
 		healthResponse = HealthResponse{ServerStatus: "error", DBStatus: "disconnected"}
+		w.WriteHeader(http.StatusServiceUnavailable)
 	}
 
 	if err := json.NewEncoder(w).Encode(healthResponse); err != nil {
-		s.logger.Printf("POST /health: ошибка кодирования: %v", err)
-		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		s.logger.Printf("GET /health: ошибка кодирования: %v", err)
 		return
 	}
-	s.logger.Printf("POST /health: подключение успешно")
-
+	s.logger.Printf("GET /health: подключение успешно")
 }
