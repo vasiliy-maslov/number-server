@@ -134,7 +134,7 @@ func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		s.logger.Printf("POST /reset: неверный метод: %s", r.Method)
+		s.logger.Printf("GET /reset: неверный метод: %s", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
