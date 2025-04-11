@@ -27,6 +27,7 @@ func NewServer(cfg Config, w Worker) *Server {
 
 func (s *Server) handleNumber(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
+		s.logger.Printf("POST /number: неверный метод: %s", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -42,6 +43,8 @@ func (s *Server) handleNumber(w http.ResponseWriter, r *http.Request) {
 	msg := kafka.Message{
 		Value: []byte(fmt.Sprintf("%d", req.Number)),
 	}
+
+	s.logger.Printf("POST /number: отправка числа %d в Kafka", req.Number)
 	maxAttempts := 5
 	for i := 0; i < maxAttempts; i++ {
 		err := s.kafkaWriter.WriteMessages(context.Background(), msg)
@@ -56,6 +59,7 @@ func (s *Server) handleNumber(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(2 * time.Second)
 	}
 
+	s.logger.Printf("POST /number: число %d успешно отправлено в Kafka", req.Number)
 	resp := NumberResponse{Status: "odd"}
 	if req.Number%2 == 0 {
 		resp = NumberResponse{Status: "even"}
@@ -72,6 +76,7 @@ func (s *Server) handleNumber(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
+		s.logger.Printf("GET /stats: неверный метод: %s", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -90,6 +95,7 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
+		s.logger.Printf("GET /logs: неверный метод: %s", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -108,6 +114,7 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
+		s.logger.Printf("POST /reset: неверный метод: %s", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -127,6 +134,7 @@ func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
+		s.logger.Printf("POST /reset: неверный метод: %s", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -144,4 +152,19 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.logger.Printf("GET /health: подключение успешно")
+}
+
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/number", s.handleNumber)
+	mux.HandleFunc("/stats", s.handleStats)
+	mux.HandleFunc("/logs", s.handleLogs)
+	mux.HandleFunc("/reset", s.handleReset)
+	mux.HandleFunc("/health", s.handleHealth)
+	return mux
+}
+
+func (s *Server) Start() error {
+	s.logger.Printf("Сервер запускается на :%s", s.port)
+	return http.ListenAndServe(":"+s.port, s.Handler())
 }

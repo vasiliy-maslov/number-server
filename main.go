@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -56,12 +55,13 @@ func main() {
 					break
 				}
 				num, err := strconv.Atoi(string(msg.Value))
+				srv.logger.Printf("Получено число из Kafka: %d", num)
 				if err != nil {
 					srv.logger.Printf("Ошибка парсинга числа из Kafka: %v", err)
 					continue
 				}
 				srv.worker.ProcessNumber(num)
-				srv.logger.Printf("Обработано число из Kafka: %d", num)
+				srv.logger.Printf("Число %d обработано и отправлено в БД", num)
 			}
 		}
 	}()
@@ -71,14 +71,7 @@ func main() {
 		return
 	}
 
-	http.HandleFunc("/number", srv.handleNumber)
-	http.HandleFunc("/stats", srv.handleStats)
-	http.HandleFunc("/logs", srv.handleLogs)
-	http.HandleFunc("/reset", srv.handleReset)
-	http.HandleFunc("/health", srv.handleHealth)
-
-	srv.logger.Printf("Сервер запущен на %s", srv.port)
-	if err := http.ListenAndServe(srv.port, nil); err != nil {
-		srv.logger.Printf("Ошибка запуска сервера: %v", err)
+	if err := srv.Start(); err != nil {
+		srv.logger.Fatalf("Ошибка запуска сервера: %v", err)
 	}
 }
