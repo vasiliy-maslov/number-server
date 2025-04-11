@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"sync"
 
@@ -30,12 +31,17 @@ type HealthResponse struct {
 }
 
 type WorkerPool struct {
+	db          *sql.DB // Добавляем поле для БД
 	numbersChan chan int
 	statsChan   chan chan Stats
-	resultsChan chan Stats
 	resetChan   chan struct{}
 	logMutex    *sync.Mutex
 	logFile     string
+	stats       Stats         // Добавляем статистику
+	buffer      []numberEntry // Добавляем буфер
+	bufferMutex sync.Mutex    // Мьютекс для буфера
+	wg          sync.WaitGroup
+	closed      chan struct{}
 }
 
 type Server struct {
@@ -54,7 +60,9 @@ type DBConfig struct {
 }
 
 type Config struct {
-	Port    string   `json:"port"`
-	LogFile string   `json:"log_file"`
-	DB      DBConfig `json:"db"`
+	Port          string   `json:"port"`
+	LogFile       string   `json:"log_file"`
+	DB            DBConfig `json:"db"`
+	BufferSize    int      `json:"buffer_size"`
+	FlushInterval string   `json:"flush_interval"`
 }

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -24,16 +26,12 @@ func main() {
 		return
 	}
 
-	wp, err := NewPostgresWorker(cfg.DB)
+	wp, err := NewWorkerPool(cfg)
 	if err != nil {
-		fmt.Printf("Ошибка подключения к БД: %v\n", err)
+		fmt.Printf("Ошибка инициализации WorkerPool: %v\n", err)
 		return
 	}
-	defer func() {
-		if err := wp.db.Close(); err != nil {
-			fmt.Printf("Ошибка закрытия БД: %v\n", err)
-		}
-	}()
+	defer wp.Close()
 
 	srv := NewServer(cfg, wp)
 
@@ -61,7 +59,7 @@ func main() {
 					continue
 				}
 				srv.worker.ProcessNumber(num)
-				srv.logger.Printf("Число %d обработано и отправлено в БД", num)
+				srv.logger.Printf("Число %d отправлено в WorkerPool", num)
 			}
 		}
 	}()
@@ -71,7 +69,15 @@ func main() {
 		return
 	}
 
-	if err := srv.Start(); err != nil {
-		srv.logger.Fatalf("Ошибка запуска сервера: %v", err)
-	}
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		if err := srv.Start(); err != nil {
+			srv.logger.Fatalf("Ошибка запуска сервера: %v", err)
+		}
+	}()
+
+	<-sigChan
+	srv.logger.Println("Shutting down server...")
 }

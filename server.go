@@ -43,7 +43,6 @@ func (s *Server) handleNumber(w http.ResponseWriter, r *http.Request) {
 	msg := kafka.Message{
 		Value: []byte(fmt.Sprintf("%d", req.Number)),
 	}
-
 	s.logger.Printf("POST /number: отправка числа %d в Kafka", req.Number)
 	maxAttempts := 5
 	for i := 0; i < maxAttempts; i++ {
@@ -58,8 +57,8 @@ func (s *Server) handleNumber(w http.ResponseWriter, r *http.Request) {
 		}
 		time.Sleep(2 * time.Second)
 	}
-
 	s.logger.Printf("POST /number: число %d успешно отправлено в Kafka", req.Number)
+
 	resp := NumberResponse{Status: "odd"}
 	if req.Number%2 == 0 {
 		resp = NumberResponse{Status: "even"}
@@ -134,7 +133,7 @@ func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		s.logger.Printf("GET /reset: неверный метод: %s", r.Method)
+		s.logger.Printf("GET /health: неверный метод: %s", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}

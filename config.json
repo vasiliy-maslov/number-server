@@ -7,5 +7,7 @@
       "user": "postgres",
       "password": "123456",
       "dbname": "number_server"
-  }
+  },
+  "buffer_size": 50,
+  "flush_interval": "5s"
 }
