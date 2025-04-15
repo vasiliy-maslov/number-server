@@ -26,7 +26,7 @@ func main() {
 		return
 	}
 
-	wp, err := NewWorkerPool(cfg)
+	wp, err := NewWorkerPool(cfg) // Используем весь cfg
 	if err != nil {
 		fmt.Printf("Ошибка инициализации WorkerPool: %v\n", err)
 		return

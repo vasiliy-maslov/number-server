@@ -12,15 +12,6 @@ import (
 	_ "github.com/lib/pq"
 )
 
-type Worker interface {
-	ProcessNumber(num int)
-	GetStats() Stats
-	Reset()
-	GetLogs() string
-	Ping() error
-	Close() error
-}
-
 type numberEntry struct {
 	num    int
 	isEven bool

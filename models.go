@@ -30,16 +30,25 @@ type HealthResponse struct {
 	DBStatus     string `json:"db"`
 }
 
+type Worker interface {
+	ProcessNumber(num int)
+	GetStats() Stats
+	Reset()
+	GetLogs() string
+	Ping() error
+	Close() error
+}
+
 type WorkerPool struct {
-	db          *sql.DB // Добавляем поле для БД
+	db          *sql.DB
 	numbersChan chan int
 	statsChan   chan chan Stats
 	resetChan   chan struct{}
 	logMutex    *sync.Mutex
 	logFile     string
-	stats       Stats         // Добавляем статистику
-	buffer      []numberEntry // Добавляем буфер
-	bufferMutex sync.Mutex    // Мьютекс для буфера
+	stats       Stats
+	buffer      []numberEntry
+	bufferMutex sync.Mutex
 	wg          sync.WaitGroup
 	closed      chan struct{}
 }
