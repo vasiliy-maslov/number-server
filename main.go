@@ -1,16 +1,13 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
+	"number-server/kafka"
+	"number-server/models"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
-	"time"
-
-	"github.com/segmentio/kafka-go"
 )
 
 func main() {
@@ -20,49 +17,22 @@ func main() {
 		return
 	}
 
-	var cfg Config
+	var cfg models.Config
 	if err := json.Unmarshal(configFile, &cfg); err != nil {
 		fmt.Printf("Ошибка разбора конфига: %v\n", err)
 		return
 	}
 
-	wp, err := NewWorkerPool(cfg) // Используем весь cfg
+	wp, err := NewWorkerPool(cfg)
 	if err != nil {
 		fmt.Printf("Ошибка инициализации WorkerPool: %v\n", err)
 		return
 	}
 	defer wp.Close()
 
-	srv := NewServer(cfg, wp)
-
-	go func() {
-		maxAttempts := 10
-		for i := 0; i < maxAttempts; i++ {
-			reader := kafka.NewReader(kafka.ReaderConfig{
-				Brokers: []string{"kafka:9092"},
-				Topic:   "numbers",
-				GroupID: "number-consumer",
-			})
-			defer reader.Close()
-
-			for {
-				msg, err := reader.ReadMessage(context.Background())
-				if err != nil {
-					srv.logger.Printf("Попытка %d: ошибка чтения из Kafka: %v", i+1, err)
-					time.Sleep(2 * time.Second)
-					break
-				}
-				num, err := strconv.Atoi(string(msg.Value))
-				srv.logger.Printf("Получено число из Kafka: %d", num)
-				if err != nil {
-					srv.logger.Printf("Ошибка парсинга числа из Kafka: %v", err)
-					continue
-				}
-				srv.worker.ProcessNumber(num)
-				srv.logger.Printf("Число %d отправлено в WorkerPool", num)
-			}
-		}
-	}()
+	srv := NewServer(cfg, wp) // NewServer принимает models.Worker
+	consumer := kafka.NewConsumer(srv.logger, wp, []string{"kafka:9092"}, "number-consumer")
+	defer consumer.Close()
 
 	if err := os.WriteFile(cfg.LogFile, []byte{}, 0644); err != nil {
 		srv.logger.Printf("Ошибка очистки логов: %v", err)

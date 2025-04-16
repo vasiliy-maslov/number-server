@@ -8,6 +8,6 @@
       "password": "123456",
       "dbname": "number_server"
   },
-  "buffer_size": 50,
+  "buffer_size": 5,
   "flush_interval": "5s"
 }

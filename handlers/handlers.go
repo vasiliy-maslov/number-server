@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-
-	"./models"
 	"number-server/kafka"
+	"number-server/models"
 )
 
 type Handler struct {
@@ -26,29 +25,31 @@ func (h *Handler) Number(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	var req models.NumberRequest
+	var req NumberRequest
 	h.logger.Printf("POST /number: декодирование числа")
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Printf("POST /number: ошибка декодирования: %v", err)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-
 	err := h.kafkaWriter.Send(r.Context(), "numbers", fmt.Sprintf("%d", req.Number))
 	if err != nil {
 		h.logger.Printf("POST /number: ошибка отправки в Kafka: %v", err)
 		http.Error(w, "Error sending to Kafka", http.StatusInternalServerError)
 		return
 	}
+	h.worker.ProcessNumber(req.Number) // Добавить
+	if err := h.worker.LogRequest(req.Number); err != nil {
+		h.logger.Printf("POST /number: ошибка БД: %v", err)
+	} else {
+		h.logger.Printf("POST /number: число %d записано в БД", req.Number)
+	}
 	h.logger.Printf("POST /number: число %d успешно отправлено в Kafka", req.Number)
-
-	resp := models.NumberResponse{Status: "odd"}
+	resp := NumberResponse{Status: "odd"}
 	if req.Number%2 == 0 {
-		resp = models.NumberResponse{Status: "even"}
+		resp = NumberResponse{Status: "even"}
 	}
 	w.Header().Set("Content-Type", "application/json")
-
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		h.logger.Printf("POST /number: ошибка кодирования: %v", err)
 		http.Error(w, "Error encoding response", http.StatusInternalServerError)
@@ -106,7 +107,7 @@ func (h *Handler) Reset(w http.ResponseWriter, r *http.Request) {
 	h.worker.Reset()
 
 	w.Header().Set("Content-Type", "application/json")
-	resetResponse := models.ResetResponse{Status: "reset completed"}
+	resetResponse := ResetResponse{Status: "reset completed"}
 	if err := json.NewEncoder(w).Encode(resetResponse); err != nil {
 		h.logger.Printf("POST /reset: ошибка кодирования: %v", err)
 		http.Error(w, "Error encoding response", http.StatusInternalServerError)
@@ -122,11 +123,11 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	healthResponse := models.HealthResponse{ServerStatus: "ok", DBStatus: "connected"}
+	healthResponse := HealthResponse{ServerStatus: "ok", DBStatus: "connected"}
 	w.Header().Set("Content-Type", "application/json")
 	if err := h.worker.Ping(); err != nil {
 		h.logger.Printf("GET /health: ошибка подключения к БД: %v", err)
-		healthResponse = models.HealthResponse{ServerStatus: "error", DBStatus: "disconnected"}
+		healthResponse = HealthResponse{ServerStatus: "error", DBStatus: "disconnected"}
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}
 

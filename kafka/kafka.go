@@ -3,14 +3,13 @@ package kafka
 import (
 	"context"
 	"fmt"
+	"github.com/segmentio/kafka-go"
 	"log"
+	"number-server/models"
+	"number-server/utils"
 	"strconv"
 	"sync"
 	"time"
-
-	"github.com/segmentio/kafka-go"
-	"number-server/models"
-	"number-server/utils"
 )
 
 type Producer struct {
@@ -18,14 +17,12 @@ type Producer struct {
 	mutex   sync.Mutex
 }
 
-func NewProducer(brokers []string, topics []models.KafkaTopic) *Producer {
+func NewProducer(brokers []string) *Producer {
 	writers := make(map[string]*kafka.Writer)
-	for _, topic := range topics {
-		writers[topic.Name] = &kafka.Writer{
-			Addr:     kafka.TCP(brokers...),
-			Topic:    topic.Name,
-			Balancer: &kafka.LeastBytes{},
-		}
+	writers["numbers"] = &kafka.Writer{
+		Addr:     kafka.TCP(brokers...),
+		Topic:    "numbers",
+		Balancer: &kafka.LeastBytes{},
 	}
 	return &Producer{writers: writers}
 }
@@ -58,23 +55,21 @@ type Consumer struct {
 	closed  chan struct{}
 }
 
-func NewConsumer(logger *log.Logger, worker models.Worker, brokers []string, groupID string, topics []models.KafkaTopic) *Consumer {
+func NewConsumer(logger *log.Logger, worker models.Worker, brokers []string, groupID string) *Consumer {
 	c := &Consumer{
 		logger:  logger,
 		worker:  worker,
 		readers: make(map[string]*kafka.Reader),
 		closed:  make(chan struct{}),
 	}
-	for _, topic := range topics {
-		reader := kafka.NewReader(kafka.ReaderConfig{
-			Brokers: brokers,
-			Topic:   topic.Name,
-			GroupID: groupID,
-		})
-		c.readers[topic.Name] = reader
-		c.wg.Add(1)
-		go c.consume(topic.Name, reader)
-	}
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers: brokers,
+		Topic:   "numbers",
+		GroupID: groupID,
+	})
+	c.readers["numbers"] = reader
+	c.wg.Add(1)
+	go c.consume("numbers", reader)
 	return c
 }
 
@@ -97,8 +92,7 @@ func (c *Consumer) consume(topic string, reader *kafka.Reader) {
 				c.logger.Printf("Error parsing number from %s: %v", topic, err)
 				continue
 			}
-			c.worker.ProcessNumber(num)
-			c.logger.Printf("Processed number %d from topic %s", num, topic)
+			c.logger.Printf("Sent number %d to worker from topic %s", num, topic)
 		}
 	}
 }
